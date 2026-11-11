@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Night Survivors</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+<style>
+  html, body { margin: 0; height: 100%; background: #07060d; display: flex; align-items: center; justify-content: center; font-family: "Segoe UI", Arial, sans-serif; overflow: hidden; }
+  #wrap { position: relative; }
+  canvas { display: block; background: #000; box-shadow: 0 0 40px #000; }
+  #hud { position: absolute; top: 0; left: 0; right: 0; color: #fff; pointer-events: none; text-shadow: 0 2px 4px #000; padding: 8px 10px; box-sizing: border-box; }
+  .xpbar { height: 14px; background: rgba(0,0,0,.6); border: 2px solid #ddd; border-radius: 4px; overflow: hidden; }
+  .xpbar div { height: 100%; width: 0; background: linear-gradient(90deg,#3fa9ff,#8be0ff); }
+  .row { display: flex; justify-content: space-between; margin-top: 4px; font-size: 15px; font-weight: bold; }
+  #timer { position: absolute; top: 34px; left: 0; right: 0; text-align: center; font-size: 26px; font-weight: bold; }
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; background: rgba(0,0,0,.75); text-shadow: 0 3px 6px #000; }
+  .screen h1 { font-size: 52px; margin: 0 0 10px; letter-spacing: 4px; color: #ff4d4d; }
+  .screen h2 { margin: 0 0 14px; font-size: 34px; color: #ffd84d; letter-spacing: 3px; }
+  .screen p { margin: 4px; font-size: 18px; }
+  .coins { font-size: 22px; color: #ffd84d; font-weight: bold; margin: 8px 0 14px; }
+  .btn { display: inline-block; padding: 10px 28px; margin: 6px; font-size: 18px; font-weight: bold; color: #fff; background: #2d2850; border: 3px solid #666; border-radius: 8px; cursor: pointer; user-select: none; }
+  .btn:hover, .btn.sel { border-color: #ffd84d; background: #3d3870; box-shadow: 0 0 14px #ffd84d66; }
+  .btn.play { background: #1f6b3a; border-color: #4dff6a; } .btn.play:hover { background: #2a8a4c; }
+  #pauseBtn { position: absolute; top: 36px; right: 10px; padding: 4px 14px; font-size: 14px; font-weight: bold; color: #fff; background: rgba(0,0,0,.6); border: 2px solid #aaa; border-radius: 6px; cursor: pointer; user-select: none; }
+  #pauseBtn:hover { border-color: #ffd84d; }
+  #shopItems, #charItems, #evoItems { max-height: 400px; overflow-y: auto; }
+  .item.info { cursor: default; }
+  .item .req { display: inline; } .req.ok { color: #4dff6a; } .req.no { color: #ff6b6b; }
+  .item.owned small { color: #4dff6a; }
+  .item { width: 540px; display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; margin: 4px; background: #1b1830; border: 3px solid #444; border-radius: 8px; box-sizing: border-box; cursor: pointer; }
+  .item.sel { border-color: #ffd84d; background: #2d2850; }
+  .item.maxed { opacity: .55; cursor: default; }
+  .item b { font-size: 17px; } .item small { color: #ffd84d; margin-left: 6px; } .item span { display: block; font-size: 13px; opacity: .85; }
+  .price { font-weight: bold; color: #ffd84d; white-space: nowrap; } .price.poor { color: #ff6b6b; }
+  .ico { image-rendering: pixelated; flex: none; }
+  .item .lhs { display: flex; align-items: center; gap: 10px; }
+  .choice { width: 420px; padding: 12px 16px; margin: 6px; background: #1b1830; border: 3px solid #444; border-radius: 8px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; }
+  .choice.sel { border-color: #ffd84d; background: #2d2850; box-shadow: 0 0 16px #ffd84d66; }
+  .choice.evo { border-color: #ff8a3b; background: #3a2214; }
+  .choice.evo.sel { border-color: #ffb070; box-shadow: 0 0 20px #ff8a3b99; }
+  .choice b { font-size: 18px; } .choice span { display: block; font-size: 14px; opacity: .85; margin-top: 3px; }
+  .hint { margin-top: 12px; font-size: 14px; opacity: .8; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="960" height="600"></canvas>
+  <div id="hud">
+    <div class="xpbar"><div id="xp"></div></div>
+    <div class="row"><span id="lvl">LV 1</span><span id="kills">Kills: 0</span></div>
+  </div>
+  <div id="timer">00:00</div>
+  <div id="pauseBtn" class="hidden">❚❚ PAUSE</div>
+
+  <div id="levelup" class="screen hidden">
+    <h2 id="levelupTitle">LEVEL UP!</h2>
+    <p id="levelupSlots" style="font-size:14px;opacity:.8;margin:-6px 0 8px"></p>
+    <div id="choices"></div>
+    <div class="hint">W / S or ↑ / ↓ to pick &nbsp;•&nbsp; SPACE or ENTER to confirm &nbsp;•&nbsp; I for evolution key</div>
+  </div>
+
+  <div id="menu" class="screen">
+    <h1>NIGHT SURVIVORS</h1>
+    <p>Move with <b>WASD</b> or <b>arrow keys</b>. Weapons fire on their own.</p>
+    <p>Two players share one keyboard: <b>P1 = WASD</b>, <b>P2 = arrow keys</b>. XP is shared; fallen players return at the next level up.</p>
+    <p>Collect blue gems to level up and choose upgrades. Survive 15 minutes.</p>
+    <div class="coins">🪙 <span id="menuCoins">0</span> coins</div>
+    <div><span class="btn" id="tutorial">📘Tutorial</span><span class="btn play" id="playBtn">▶ 1 PLAYER</span><span class="btn play" id="play2Btn">👥 2 PLAYERS</span><span class="btn" id="shopBtn">🛒 SHOP</span><span class="btn" id="evoBtn">📖 EVOLUTIONS</span></div>
+    <div class="hint">SPACE for 1 player &nbsp;•&nbsp; 2 for two players &nbsp;•&nbsp; ESC or P pauses during a run &nbsp;•&nbsp; I shows the evolution key any time</div>
+  </div>
+
+  <div id="chars" class="screen hidden">
+    <h2 id="charTitle">CHOOSE YOUR SURVIVOR</h2>
+    <div class="coins">🪙 <span id="charCoins">0</span> coins</div>
+    <div id="charItems"></div>
+    <div><span class="btn play" id="charPlay">▶ START</span><span class="btn" id="charBack">← BACK</span></div>
+    <div class="hint">W / S or ↑ / ↓ to pick &nbsp;•&nbsp; SPACE or ENTER to buy / confirm &nbsp;•&nbsp; ESC to go back</div>
+  </div>
+
+  <div id="shop" class="screen hidden">
+    <h2>SHOP</h2>
+    <div class="coins">🪙 <span id="shopCoins">0</span> coins</div>
+    <div id="shopItems"></div>
+    <div><span class="btn" id="shopBack">← BACK</span></div>
+    <div class="hint">W / S to pick &nbsp;•&nbsp; SPACE to buy &nbsp;•&nbsp; ESC to go back</div>
+  </div>
+
+  <div id="pause" class="screen hidden">
+    <h2>PAUSED</h2>
+    <div><span class="btn play" id="resumeBtn">▶ RESUME</span><span class="btn" id="pauseEvoBtn">📖 EVOLUTIONS</span><span class="btn" id="quitBtn">✖ QUIT TO MENU</span></div>
+    <div class="hint">SPACE / ESC to resume &nbsp;•&nbsp; I for evolution key</div>
+  </div>
+
+  <div id="evos" class="screen hidden">
+    <h2>EVOLUTION KEY</h2>
+    <p>Max out a weapon and hold its passive item. The evolution is then offered on your next level up.</p>
+    <div id="evoItems"></div>
+    <div><span class="btn" id="evoBack">← BACK</span></div>
+    <div class="hint">I or ESC to close</div>
+  </div>
+
+  <div id="gameover" class="screen hidden"></div>
+</div>
+
+<script src="textures.js"></script>
+<script>
+const canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+ctx.imageSmoothingEnabled = false; // keep pixel art crisp
+const TEX = window.TEXTURES || {};
+// Draw a texture-pack sprite centred on (x, y), scaled so its height = size. Returns false if the pack has no such sprite.
+function sprite(name, x, y, size, o = {}) {
+  const t = TEX[name]; if (!t) return false;
+  const s = size / t.h, w = t.w * s, h = t.h * s;
+  ctx.save(); ctx.translate(x, y + (o.bob || 0)); if (o.flip) ctx.scale(-1, 1);
+  ctx.drawImage(o.flash ? t.flash : t.img, -w / 2, -h / 2, w, h);
+  ctx.restore(); return true;
+}
+// Same sprites for the HTML menus: an <img> built from the sprite's canvas (data URL cached). Empty string if there's no such sprite.
+const ICON_URL = {};
+function icon(name, size = 36) {
+  const t = TEX[name]; if (!t) return '';
+  if (!ICON_URL[name]) ICON_URL[name] = t.img.toDataURL();
+  return `<img class="ico" src="${ICON_URL[name]}" width="${size}" height="${size}" alt="">`;
+}
+const $ = id => document.getElementById(id);
+const levelupEl = $('levelup'), choicesEl = $('choices');
+const SCREENS = ['menu', 'chars', 'shop', 'pause', 'gameover', 'levelup', 'evos'];
+function show(id) { for (const s of SCREENS) $(s).classList.toggle('hidden', s !== id); }
+
+// ---------- Audio ----------
+let actx = null;
+function beep(f, d, type = 'square', vol = 0.05) {
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, actx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(Math.max(40, f * 0.5), actx.currentTime + d);
+    g.gain.setValueAtTime(vol, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + d);
+    o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + d);
+  } catch (e) {}
+}
+
+// ---------- Input ----------
+const keys = {};
+addEventListener('keydown', e => {
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  if (e.repeat) return;
+  keys[e.key] = true;
+  const k = e.key, up = k === 'w' || k === 'W' || k === 'ArrowUp', dn = k === 's' || k === 'S' || k === 'ArrowDown';
+  const esc = k === 'Escape' || k === 'p' || k === 'P', ok = k === ' ' || k === 'Enter'; // ENTER works too so player 2 can confirm from the arrow-key side
+  if (state === 'evos')         { if (k === 'i' || k === 'I' || k === 'Escape') closeEvos(); return; }
+  if (k === 'i' || k === 'I')   { openEvos(); return; } // evolution key, from any screen
+  if (state === 'menu')         { if (k === ' ') openChars(false); else if (k === '2') openChars(true); }
+  else if (state === 'over')    { if (ok) startGame(); else if (k === 'Escape') openMenu(); }
+  else if (state === 'chars')   { if (ok) charConfirm(charSel); else if (up) charMove(-1); else if (dn) charMove(1); else if (k === 'Escape') openMenu(); }
+  else if (state === 'levelup') { if (ok) confirmChoice(); else if (up) moveSel(-1); else if (dn) moveSel(1); }
+  else if (state === 'shop')    { if (ok) shopBuy(shopSel); else if (up) shopMove(-1); else if (dn) shopMove(1); else if (k === 'Escape') openMenu(); }
+  else if (state === 'play')    { if (esc) pauseGame(); }
+  else if (state === 'pause')   { if (esc || ok) resumeGame(); }
+});
+addEventListener('keyup', e => keys[e.key] = false);
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; pauseGame(); }); // auto-pause when the tab loses focus
+const down = (...ks) => ks.some(k => keys[k]);
+
+// Buttons (mouse)
+$('playBtn').onclick = () => openChars(false);
+$('play2Btn').onclick = () => openChars(true);
+$('shopBtn').onclick = openShop;
+$('shopBack').onclick = openMenu;
+$('charPlay').onclick = charNext;
+$('charBack').onclick = openMenu;
+$('charItems').onclick = e => { const it = e.target.closest('.item'); if (it) charPick(+it.dataset.i); };
+$('pauseBtn').onclick = pauseGame;
+$('resumeBtn').onclick = resumeGame;
+$('quitBtn').onclick = openMenu;
+$('evoBtn').onclick = $('pauseEvoBtn').onclick = openEvos;
+$('evoBack').onclick = closeEvos;
+$('shopItems').onclick = e => { const it = e.target.closest('.item'); if (it) { shopSel = +it.dataset.i; shopBuy(shopSel); } };
+
+// ---------- Game state ----------
+let state = 'menu', time = 0, kills = 0, lastT = 0;
+let enemies, bullets, gems, particles, texts, spawnTimer, bossTimer, foodTimer;
+// ---- players ----
+// `players` holds 1 or 2 survivors. `player` always points at whichever one is being processed right now
+// (firing weapons, picking an upgrade, ...) so the weapon helpers below can stay single-player code.
+let players = [], player = null, twoP = false;
+let teamLvl = 1, teamXp = 0, teamNext = 0; // XP and level are shared by the whole team
+const KEYS_P1 = { l: ['a', 'A'], r: ['d', 'D'], u: ['w', 'W'], d: ['s', 'S'] };
+const KEYS_P2 = { l: ['ArrowLeft'], r: ['ArrowRight'], u: ['ArrowUp'], d: ['ArrowDown'] };
+const KEYS_BOTH = { l: [...KEYS_P1.l, ...KEYS_P2.l], r: [...KEYS_P1.r, ...KEYS_P2.r], u: [...KEYS_P1.u, ...KEYS_P2.u], d: [...KEYS_P1.d, ...KEYS_P2.d] };
+const alivePlayers = () => players.filter(p => p.alive);
+function camCenter() { // midpoint of the living players: the camera, the spawn ring and the "edge of the screen" all use it
+  const a = alivePlayers().length ? alivePlayers() : players;
+  return { x: a.reduce((s, p) => s + p.x, 0) / a.length, y: a.reduce((s, p) => s + p.y, 0) / a.length };
+}
+function nearestPlayer(o) { let best = null, bd = Infinity; for (const p of players) if (p.alive) { const d = dist(o, p); if (d < bd) { bd = d; best = p; } } return best; }
+const teamCurse = () => players.reduce((s, p) => s + p.curse, 0);       // both players' curses stack
+const teamMax = key => Math.max(...players.map(p => p[key]));           // luck / greed: the better of the two counts
+const FOOD_HEAL = 60;
+// ---- difficulty / drop tuning ----
+const ENEMY_HP_MULT = 1.5, ENEMY_DMG_MULT = 1.3, ENEMY_SPD_MULT = 1.1; // stronger enemies
+const FOOD_DROP_CHANCE = 0.005, COIN_DROP_CHANCE = 0.02;                 // were 0.01 / 0.08
+const coinValue = () => 1 + Math.floor(Math.random() * 3);              // every coin is worth 1-3
+const CURSE_POWER = 1;                                                   // per rank: +100% enemy HP & dmg, +100% coin drops
+const BOSS_EVERY = 150;                                                  // seconds between bosses (was 300)
+const XP_MULT = 1.5;                                                     // +0.5 on every XP gem
+// ---- exponential scaling ----
+const XP_BASE = 8, XP_GROWTH = 1.18;                                     // XP for next level = 8 * 1.18^(level-1)  (lv10 ≈ 35, lv20 ≈ 185, lv30 ≈ 970)
+const xpToNext = lvl => Math.floor(XP_BASE * Math.pow(XP_GROWTH, lvl - 1));
+const ENEMY_HP_GROWTH = 1.09;                                            // enemy HP ×1.09 per minute (5 min ≈ 1.5×, 10 min ≈ 2.4×, 15 min ≈ 3.6×)
+function spawnFood(x, y) { gems.push({ x, y, heal: true }); }
+let choices = [], sel = 0;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+// ---------- Weapons & passives ----------
+/* ================================================================
+   REMINDER: every weapon in WEAPONS (base AND evolved) needs a
+   matching starting character in CHARACTERS further down.
+   When you add a new weapon here, add a character for it there too
+   (base weapon = CHAR_COST coins, evolved weapon = CHAR_COST_EVO).
+   ================================================================ */
+const WEAPONS = {
+  whip:   { name: 'Whip',        desc: 'Slashes horizontally in front of you.',     cd: 1.1, dmg: 12, evo: { into: 'bloodytear', needs: 'hp' } },
+  wand:   { name: 'Magic Wand',  desc: 'Fires a bolt at the nearest enemy.',        cd: 0.9, dmg: 10, evo: { into: 'holywand', needs: 'cool' } },
+  knife:  { name: 'Knife',       desc: 'Throws knives in the direction you face.',  cd: 0.7, dmg: 7,  evo: { into: 'thousandedge', needs: 'pspeed' } },
+  axe:    { name: 'Axe',         desc: 'Hurls a heavy spinning axe upward.',        cd: 1.5, dmg: 25, evo: { into: 'deathspiral', needs: 'area' } },
+  garlic: { name: 'Garlic',      desc: 'Damages all enemies near you.',             cd: 0.4, dmg: 3,  evo: { into: 'souleater', needs: 'regen' } },
+  bible:  { name: 'Holy Book',   desc: 'Books orbit you and cut through enemies.',  cd: 4.0, dmg: 10, evo: { into: 'vespers', needs: 'duration' } },
+  fire:      { name: 'Fire Wand',      desc: 'Hurls a big piercing fireball at a random enemy.', cd: 1.6, dmg: 30, evo: { into: 'hellfire', needs: 'might' } },
+  cross:     { name: 'Cross',          desc: 'A boomerang that flies out and comes back.',       cd: 1.4, dmg: 14, evo: { into: 'heavensword', needs: 'luck' } },
+  lightning: { name: 'Lightning Ring', desc: 'Lightning strikes random enemies.',                cd: 1.3, dmg: 18, evo: { into: 'thunderloop', needs: 'amount' } },
+  water:     { name: 'Holy Water',     desc: 'Throws flasks that leave burning puddles.',        cd: 2.2, dmg: 3,  evo: { into: 'laborra', needs: 'magnet' } },
+  tracer:    { name: 'Runetracer',     desc: 'A rune that bounces around the screen, piercing all.', cd: 2.5, dmg: 12, evo: { into: 'nofuture', needs: 'armor' } },
+  pentagram: { name: 'Pentagram',      desc: 'Blasts every enemy on screen. Very slow to recharge.', cd: 10,  dmg: 80, evo: { into: 'moon', needs: 'growth' } },
+  mana:      { name: 'Song of Mana',   desc: 'A beam of light above and below you.',                 cd: 1.8, dmg: 9,  evo: { into: 'mannajja', needs: 'curse' } },
+  pinion:    { name: 'Shadow Pinion',  desc: 'Leaves damaging zones while you move, strikes when you stop.', cd: 0.25, dmg: 6, evo: { into: 'valkyrie', needs: 'speed' } },
+  // `with`: a union evolution - this weapon AND the other one must both be at max level
+  phiera:    { name: 'Phiera Der Tuphello', desc: 'Fires quickly in the four diagonal directions.', cd: 1.0, dmg: 8, evo: { into: 'phieraggi', needs: 'revive', with: 'sparrow' } },
+  sparrow:   { name: 'Eight The Sparrow',   desc: 'Fires quickly up, down, left and right.',       cd: 1.0, dmg: 8, evo: { into: 'phieraggi', needs: 'revive', with: 'phiera' } },
+  // ---- evolved forms (can't be picked directly) ----
+  bloodytear:   { name: 'Bloody Tear',     desc: 'Huge double slash that heals you on hit.',          cd: 0.8,  dmg: 30, evolved: true },
+  holywand:     { name: 'Holy Wand',       desc: 'Fires a constant stream of piercing bolts.',        cd: 0.2,  dmg: 14, evolved: true },
+  thousandedge: { name: 'Thousand Edge',   desc: 'Endless storm of knives.',                          cd: 0.08, dmg: 9,  evolved: true },
+  deathspiral:  { name: 'Death Spiral',    desc: 'Axes spiral outward in every direction.',           cd: 1.6,  dmg: 35, evolved: true },
+  souleater:    { name: 'Soul Eater',      desc: 'Massive aura. Every kill inside it heals you.',     cd: 0.3,  dmg: 8,  evolved: true },
+  vespers:      { name: 'Unholy Vespers',  desc: 'Books orbit permanently and hit much harder.',      cd: 1.0,  dmg: 22, evolved: true },
+  hellfire:     { name: 'Hellfire',        desc: 'Three huge fireballs that pierce everything.',      cd: 1.2,  dmg: 45, evolved: true },
+  heavensword:  { name: 'Heaven Sword',    desc: 'Blades boomerang at several enemies at once.',      cd: 1.0,  dmg: 24, evolved: true },
+  thunderloop:  { name: 'Thunder Loop',    desc: 'Lightning rains on many enemies at once.',          cd: 0.9,  dmg: 26, evolved: true },
+  laborra:      { name: 'La Borra',        desc: 'Huge, long-lasting puddles cover the ground.',      cd: 1.8,  dmg: 6,  evolved: true },
+  nofuture:     { name: 'No Future',       desc: 'Runes that explode every time they bounce.',        cd: 2.0,  dmg: 20, evolved: true },
+  moon:         { name: 'Gorgeous Moon',   desc: 'Blasts the screen and pulls in every gem.',         cd: 8,    dmg: 120, evolved: true },
+  mannajja:     { name: 'Mannajja',        desc: 'A huge beam that also slows whatever it touches.',  cd: 1.4,  dmg: 16, evolved: true },
+  valkyrie:     { name: 'Valkyrie Turner', desc: 'A trail of fire while moving, a huge blast when you stop.', cd: 0.2, dmg: 12, evolved: true },
+  phieraggi:    { name: 'Phieraggi',       desc: 'Sixteen spinning streams of piercing bullets.',     cd: 0.4,  dmg: 14, evolved: true },
+};
+// Passives cap at 5 ranks unless `max` says otherwise. Each evolution uses a different one.
+const PASSIVES = {
+  might:    { name: 'Spinach',       desc: '+15% damage.' },
+  speed:    { name: 'Wings',         desc: '+12% move speed.' },
+  hp:       { name: 'Hollow Heart',  desc: '+20 max HP.' },
+  cool:     { name: 'Empty Tome',    desc: '-8% weapon cooldown.' },
+  magnet:   { name: 'Attractorb',    desc: '+40% gem pickup range.' },
+  armor:    { name: 'Armor',         desc: '-1 damage from every hit.' },
+  regen:    { name: 'Pummarola',     desc: 'Regenerate 0.5 HP / sec.' },
+  curse:    { name: 'Cursed Skull',  desc: 'CURSE: enemies get +100% HP and damage, but drop +100% coins.' },
+  area:     { name: 'Candelabrador', desc: '+10% weapon area and size.' },
+  pspeed:   { name: 'Bracer',        desc: '+10% projectile speed.' },
+  duration: { name: 'Spellbinder',   desc: '+10% weapon duration.' },
+  amount:   { name: 'Duplicator',    desc: 'Every weapon fires one extra time.', max: 2 },
+  luck:     { name: 'Clover',        desc: '+15% chance of chicken and coin drops.' },
+  growth:   { name: 'Crown',         desc: '+8% XP from gems.' },
+  greed:    { name: 'Stone Mask',    desc: '+10% coins picked up.' },
+  revive:   { name: 'Tiragisú',      desc: 'Revive once more per run.', max: 2 },
+};
+const MAXLVL = 6;
+const MAX_WEAPONS = 4, MAX_PASSIVES = 6; // slots per player; once full, level-ups only offer upgrades to what you have
+const UPGRADE_WEIGHT = 3;                // an upgrade to something you already own is this many times likelier to be offered than a new item
+
+// ---------- Characters ----------
+/* One character per weapon - see the reminder above WEAPONS. */
+const CHAR_COST = 1500, CHAR_COST_EVO = 5000;
+const CHARACTERS = { // `free: true` = unlocked from the start; cost is worked out from the starting weapon
+  vlad:     { name: 'Vlad',            weapon: 'whip',         free: true, desc: 'The classic night hunter.' },
+  mira:     { name: 'Mira',            weapon: 'wand',         desc: 'A witch who lets her bolts do the talking.' },
+  rook:     { name: 'Rook',            weapon: 'knife',        desc: 'Never runs out of knives.' },
+  brom:     { name: 'Brom',            weapon: 'axe',          desc: 'Big axe. Bigger arms.' },
+  nonna:    { name: 'Nonna',           weapon: 'garlic',       desc: 'Keeps the vampires away the old way.' },
+  ambrose:  { name: 'Father Ambrose',  weapon: 'bible',        desc: 'Armed with holy words.' },
+  // ---- start with an evolved weapon ----
+  vladx:    { name: 'Count Vlad',      weapon: 'bloodytear',   desc: 'Vlad, fully turned.' },
+  mirax:    { name: 'Archmage Mira',   weapon: 'holywand',     desc: 'Mira at the height of her power.' },
+  rookx:    { name: 'Shadow Rook',     weapon: 'thousandedge', desc: 'Rook, now a blur of steel.' },
+  bromx:    { name: 'Warlord Brom',    weapon: 'deathspiral',  desc: 'Brom with axes to spare.' },
+  nonnax:   { name: 'Saint Nonna',     weapon: 'souleater',    desc: 'Nonna, blessed and hungry.' },
+  ambrosex: { name: 'Bishop Ambrose',  weapon: 'vespers',      desc: 'Ambrose, ordained in darkness.' },
+  pyra:     { name: 'Pyra',            weapon: 'fire',         desc: 'Never met a problem fire could not solve.' },
+  lucius:   { name: 'Lucius',          weapon: 'cross',        desc: 'What he throws always comes back.' },
+  volta:    { name: 'Volta',           weapon: 'lightning',    desc: 'Calls the storm down on her enemies.' },
+  marina:   { name: 'Sister Marina',   weapon: 'water',        desc: 'Blesses the ground beneath her foes.' },
+  pyrax:    { name: 'Pyra Infernal',   weapon: 'hellfire',     desc: 'Pyra, and everything is burning.' },
+  luciusx:  { name: 'Radiant Lucius',  weapon: 'heavensword',  desc: 'Lucius with a sky full of blades.' },
+  voltax:   { name: 'Volta Unbound',   weapon: 'thunderloop',  desc: 'Volta, who IS the storm now.' },
+  marinax:  { name: 'Mother Marina',   weapon: 'laborra',      desc: 'Marina, drowning the night.' },
+  sigrun:   { name: 'Sigrun',          weapon: 'tracer',       desc: 'Reads the runes. The runes read back.' },
+  morgana:  { name: 'Morgana',         weapon: 'pentagram',    desc: 'Patience, then everything dies.' },
+  seraph:   { name: 'Seraphine',       weapon: 'mana',         desc: 'Her song cuts through the dark.' },
+  wyatt:    { name: 'Wyatt',           weapon: 'phiera',       desc: 'Two guns, no reload.' },
+  enzo:     { name: 'Enzo',            weapon: 'sparrow',      desc: 'Shoots straight. Always.' },
+  nyx:      { name: 'Nyx',             weapon: 'pinion',       desc: 'Shadows follow where she walks.' },
+  sigrunx:  { name: 'Sigrun Unwritten', weapon: 'nofuture',    desc: 'Sigrun, with no tomorrow left.' },
+  morganax: { name: 'Moonlit Morgana', weapon: 'moon',         desc: 'Morgana under a gorgeous moon.' },
+  seraphx:  { name: 'Seraphine Ascendant', weapon: 'mannajja', desc: 'Seraphine, singing the world still.' },
+  wyattx:   { name: 'Sixteen-Gun Wyatt', weapon: 'phieraggi',  desc: 'Wyatt, who stopped counting guns.' },
+  nyxx:     { name: 'Nyx Valkyrie',    weapon: 'valkyrie',     desc: 'Nyx, with wings of fire.' },
+};
+const CHAR_KEYS = Object.keys(CHARACTERS);
+const charCost = k => CHARACTERS[k].free ? 0 : WEAPONS[CHARACTERS[k].weapon].evolved ? CHAR_COST_EVO : CHAR_COST;
+
+// ---------- Persistent coins & shop (saved in the browser) ----------
+let coins = parseInt(localStorage.getItem('ns_coins') || '0', 10) || 0, runCoins = 0;
+let shop = {}; try { shop = JSON.parse(localStorage.getItem('ns_shop') || '{}') || {}; } catch (e) {}
+let chars = {}; try { chars = JSON.parse(localStorage.getItem('ns_chars') || '{}') || {}; } catch (e) {}
+let curChar = localStorage.getItem('ns_char') || CHAR_KEYS[0], curChar2 = localStorage.getItem('ns_char2') || CHAR_KEYS[0], charSel = 0;
+let pickingFor = 0, chosen = []; // character select: which player is choosing, and the locked-in picks for the run
+const charOwned = k => charCost(k) === 0 || !!chars[k];
+if (!CHARACTERS[curChar] || !charOwned(curChar)) curChar = CHAR_KEYS[0];
+if (!CHARACTERS[curChar2] || !charOwned(curChar2)) curChar2 = CHAR_KEYS[0];
+const curPick = () => pickingFor ? curChar2 : curChar;
+const setPick = k => { if (pickingFor) curChar2 = k; else curChar = k; };
+const save = () => {
+  localStorage.setItem('ns_coins', coins); localStorage.setItem('ns_shop', JSON.stringify(shop));
+  localStorage.setItem('ns_chars', JSON.stringify(chars)); localStorage.setItem('ns_char', curChar); localStorage.setItem('ns_char2', curChar2);
+};
+const SHOP = { // permanent upgrades bought with coins; cost grows with each rank
+  // named after the in-run passive item each one replicates
+  might:  { name: 'Spinach',      desc: '+5% damage per rank',               max: 5, cost: 40 },
+  hp:     { name: 'Hollow Heart', desc: '+10 max HP per rank',               max: 5, cost: 30 },
+  speed:  { name: 'Wings',        desc: '+4% move speed per rank',           max: 3, cost: 50 },
+  regen:  { name: 'Pummarola',    desc: '+0.25 HP / sec per rank',           max: 3, cost: 60 },
+  magnet: { name: 'Attractorb',   desc: '+15% pickup range per rank',        max: 3, cost: 30 },
+  cool:   { name: 'Empty Tome',   desc: '-4% weapon cooldown per rank',      max: 3, cost: 60 },
+  armor:  { name: 'Armor',        desc: '+1 armor per rank',                 max: 2, cost: 80 },
+  greed:  { name: 'Greed',      desc: '+20% coins found per rank',         max: 3, cost: 50 },
+  revive: { name: 'Revival',    desc: 'Come back once per run with half HP', max: 1, cost: 250 },
+};
+const SHOP_KEYS = Object.keys(SHOP);
+const rank = k => shop[k] || 0;
+const cost = k => SHOP[k].cost * (rank(k) + 1);
+let shopSel = 0;
+function addCoins(n) {
+  const m = n * (1 + rank('greed') * 0.2) * (players.length ? teamMax('greed') : 1); // shop Greed + in-run Stone Mask
+  n = Math.floor(m) + (Math.random() < m % 1 ? 1 : 0);
+  coins += n; runCoins += n; save();
+}
+function renderShop() {
+  $('shopCoins').textContent = coins;
+  $('shopItems').innerHTML = SHOP_KEYS.map((k, i) => {
+    const d = SHOP[k], r = rank(k), maxed = r >= d.max, c = cost(k);
+    return `<div class="item ${i === shopSel ? 'sel' : ''} ${maxed ? 'maxed' : ''}" data-i="${i}">
+      <div class="lhs">${icon(k)}<div><b>${d.name}</b><small>${'★'.repeat(r)}${'☆'.repeat(d.max - r)}</small><span>${d.desc}</span></div></div>
+      <div class="price ${!maxed && coins < c ? 'poor' : ''}">${maxed ? 'MAX' : '🪙 ' + c}</div></div>`;
+  }).join('');
+}
+function shopMove(d) { shopSel = (shopSel + d + SHOP_KEYS.length) % SHOP_KEYS.length; renderShop(); beep(500, 0.05, 'sine', 0.02); }
+function shopBuy(i) {
+  const k = SHOP_KEYS[i];
+  if (rank(k) >= SHOP[k].max || coins < cost(k)) { beep(120, 0.15, 'square', 0.03); return; }
+  coins -= cost(k); shop[k] = rank(k) + 1; save();
+  beep(900, 0.15, 'sine', 0.04); renderShop();
+}
+function openShop() { state = 'shop'; shopSel = 0; renderShop(); show('shop'); }
+
+// ---------- Character select ----------
+function renderChars() {
+  $('charCoins').textContent = coins;
+  $('charTitle').textContent = twoP ? `PLAYER ${pickingFor + 1} — CHOOSE YOUR SURVIVOR` : 'CHOOSE YOUR SURVIVOR';
+  $('charPlay').textContent = twoP && pickingFor === 0 ? '▶ NEXT' : '▶ START';
+  $('charItems').innerHTML = CHAR_KEYS.map((k, i) => {
+    const c = CHARACTERS[k], w = WEAPONS[c.weapon], owned = charOwned(k), price = charCost(k);
+    const tag = k === curPick() ? 'SELECTED' : owned ? 'OWNED' : w.evolved ? 'EVOLVED START' : '';
+    return `<div class="item ${i === charSel ? 'sel' : ''} ${owned ? 'owned' : ''}" data-i="${i}">
+      <div class="lhs">${icon(c.weapon)}<div><b>${c.name}</b><small>${tag}</small><span>${c.desc}</span><span style="color:${w.evolved ? '#ff8a3b' : '#5ad8ff'}">Starts with ${w.name}: ${w.desc}</span></div></div>
+      <div class="price ${!owned && coins < price ? 'poor' : ''}">${owned ? '✔' : '🪙 ' + price}</div></div>`;
+  }).join('');
+  const el = $('charItems').querySelector('.sel'); if (el) el.scrollIntoView({ block: 'nearest' });
+}
+function openChars(two) {
+  state = 'chars'; twoP = !!two; pickingFor = 0; chosen = [];
+  charSel = Math.max(0, CHAR_KEYS.indexOf(curChar)); renderChars(); show('chars');
+}
+function charMove(d) { charSel = (charSel + d + CHAR_KEYS.length) % CHAR_KEYS.length; renderChars(); beep(500, 0.05, 'sine', 0.02); }
+function charBuy(k) { // returns true if the character is now owned
+  if (charOwned(k)) return true;
+  if (coins < charCost(k)) { beep(120, 0.15, 'square', 0.03); return false; }
+  coins -= charCost(k); chars[k] = true; beep(900, 0.15, 'sine', 0.04); return true;
+}
+function charPick(i) { // mouse click: select (buying first if needed)
+  charSel = i; const k = CHAR_KEYS[i];
+  if (charBuy(k)) setPick(k);
+  save(); renderChars();
+}
+function charConfirm(i) { // SPACE / ENTER: buy if not owned, otherwise lock the pick in
+  const k = CHAR_KEYS[i];
+  if (!charOwned(k)) { if (charBuy(k)) { setPick(k); save(); } renderChars(); return; }
+  setPick(k); save(); charNext();
+}
+function charNext() { // ▶ NEXT / START: in 2-player mode player 1 picks first, then player 2, then the run begins
+  chosen[pickingFor] = curPick();
+  if (twoP && pickingFor === 0) { pickingFor = 1; charSel = Math.max(0, CHAR_KEYS.indexOf(curChar2)); renderChars(); beep(700, 0.1, 'sine', 0.03); return; }
+  startGame();
+}
+function openMenu() { state = 'menu'; players = []; player = null; $('menuCoins').textContent = coins; show('menu'); }
+function pauseGame() { if (state !== 'play') return; state = 'pause'; show('pause'); }
+function resumeGame() { if (state !== 'pause') return; state = 'play'; show(null); lastT = performance.now(); }
+
+function makePlayer(charKey, idx, x0) {
+  const startW = CHARACTERS[charKey].weapon; // evolved starting weapons come in at max level, like an in-run evolution
+  const hp = 100 + rank('hp') * 10;
+  return { idx, name: CHARACTERS[charKey].name, alive: true, keys: twoP ? (idx ? KEYS_P2 : KEYS_P1) : KEYS_BOTH,
+    x: x0, y: 0, r: 14, hp, maxHp: hp, speed: 170 * (1 + rank('speed') * 0.04),
+    face: 1, might: 1 + rank('might') * 0.05, cool: 1 - rank('cool') * 0.04, magnet: 70 * (1 + rank('magnet') * 0.15),
+    armor: rank('armor'), regen: 1 + rank('regen') * 0.25, revives: rank('revive'), hurt: 0, curse: 0,
+    area: 1, pspeed: 1, duration: 1, amount: 0, luck: 1, growth: 1, greed: 1, // in-run passives (Candelabrador, Bracer, ...)
+    weapons: { [startW]: { lvl: WEAPONS[startW].evolved ? MAXLVL : 1, t: 0 } }, passives: {} };
+}
+function startGame() {
+  state = 'play'; time = 0; kills = 0; runCoins = 0; spawnTimer = 0; bossTimer = BOSS_EVERY; foodTimer = 20;
+  teamLvl = 1; teamXp = 0; teamNext = xpToNext(1);
+  players = [];
+  for (let i = 0; i < (twoP ? 2 : 1); i++) {
+    const key = chosen[i] && charOwned(chosen[i]) ? chosen[i] : CHAR_KEYS[0];
+    players.push(makePlayer(key, i, twoP ? (i ? 40 : -40) : 0));
+  }
+  player = players[0];
+  enemies = []; bullets = []; gems = []; particles = []; texts = [];
+  for (let i = 0; i < 4; i++) { const a = Math.random() * Math.PI * 2, d = rnd(250, 500); spawnFood(Math.cos(a) * d, Math.sin(a) * d); }
+  show(null);
+  lastT = performance.now();
+}
+openMenu();
+
+// ---------- Enemies ----------
+const TYPES = [
+  { name: 'bat',    r: 10, hp: 6,   spd: 90,  dmg: 6,  xp: 1, col: '#9b5de5', from: 0 },
+  { name: 'zombie', r: 13, hp: 16,  spd: 60,  dmg: 10, xp: 2, col: '#5ec25e', from: 60 },
+  { name: 'skull',  r: 12, hp: 30,  spd: 110, dmg: 12, xp: 3, col: '#e0e0e0', from: 150 },
+  { name: 'ghoul',  r: 16, hp: 70,  spd: 75,  dmg: 18, xp: 5, col: '#ff7f50', from: 300 },
+  { name: 'mummy',  r: 18, hp: 160, spd: 55,  dmg: 25, xp: 9, col: '#d4c27a', from: 480 },
+  { name: 'reaper', r: 20, hp: 300, spd: 120, dmg: 35, xp: 15, col: '#ff3b3b', from: 720 },
+];
+function spawnEnemy(boss) {
+  const pool = TYPES.filter(t => t.from <= time);
+  const t = boss ? TYPES[Math.min(TYPES.length - 1, Math.floor(time / 300) + 2)] : pool[Math.floor(Math.random() * pool.length)];
+  const ang = Math.random() * Math.PI * 2, d = twoP ? 600 : 560, c = camCenter(); // spawn just outside the shared view
+  const scale = Math.pow(ENEMY_HP_GROWTH, time / 60); // exponential HP growth over the run
+  const m = boss ? 10 : 1;
+  const curse = 1 + teamCurse() * CURSE_POWER; // Cursed Skull: tougher, harder-hitting enemies (speed untouched)
+  enemies.push({ x: c.x + Math.cos(ang) * d, y: c.y + Math.sin(ang) * d, r: t.r * (boss ? 2.5 : 1),
+    hp: t.hp * ENEMY_HP_MULT * scale * m * curse, maxHp: t.hp * ENEMY_HP_MULT * scale * m * curse,
+    spd: t.spd * ENEMY_SPD_MULT * (boss ? 0.8 : 1), dmg: Math.round(t.dmg * ENEMY_DMG_MULT * (boss ? 2 : 1) * curse),
+    xp: t.xp * (boss ? 30 : 1), col: t.col, type: t.name, boss, flash: 0, hitBy: {}, seed: Math.random() * 7 });
+}
+
+// ---------- Weapon firing ----------
+function fire(key, w) {
+  // each level: +45% damage (on top of the extra projectiles / size / pierce below)
+  const L = w.lvl, dmg = WEAPONS[key].dmg * player.might * (1 + (L - 1) * 0.45);
+  const p = player;
+  if (key === 'whip') {
+    const sides = L >= 3 ? [p.face, -p.face] : [p.face];           // double-sided from Lv 3
+    const wd = 120 + L * 30, ht = 40 + L * 8;                      // grows every level
+    for (const s of sides) bullets.push({ kind: 'slash', x: p.x + s * (wd / 2 + 10), y: p.y - 10, w: wd, h: ht, life: 0.18, dmg, hit: new Set() });
+    beep(300, 0.08, 'sawtooth', 0.03);
+  } else if (key === 'wand') {
+    const n = 1 + Math.floor(L / 2);                               // 1,2,2,3,3,4 bolts
+    const targets = enemies.slice().sort((a, b) => dist(a, p) - dist(b, p)).slice(0, n);
+    for (const e of targets) {
+      const a = Math.atan2(e.y - p.y, e.x - p.x), sp = 400 + L * 40;
+      bullets.push({ kind: 'bolt', x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 5 + L, life: 2, dmg, pierce: Math.floor(L / 2), hit: new Set(), col: '#5ad8ff' });
+    }
+    if (targets.length) beep(800, 0.1, 'sine', 0.03);
+  } else if (key === 'knife') {
+    const n = L;                                                   // one knife per level
+    for (let i = 0; i < n; i++) bullets.push({ kind: 'bolt', x: p.x, y: p.y + (i - (n - 1) / 2) * 10, vx: p.face * (500 + L * 30), vy: 0, r: 4, life: 1.2, dmg, pierce: Math.floor(L / 2), hit: new Set(), col: '#ddd', delay: i * 0.05 });
+    beep(1200, 0.05, 'square', 0.02);
+  } else if (key === 'axe') {
+    const n = 1 + Math.floor(L / 2);                               // 1,2,2,3,3,4 axes
+    for (let i = 0; i < n; i++) bullets.push({ kind: 'axe', x: p.x, y: p.y, vx: rnd(-150, 150) + p.face * 60, vy: -520, r: 12 + L * 3, life: 3, dmg, hit: new Set(), rot: 0 });
+    beep(200, 0.15, 'triangle', 0.04);
+  } else if (key === 'garlic') {
+    const R = (45 + L * 22) * p.area;                              // aura grows fast
+    for (const e of enemies) if (dist(e, p) < R + e.r) hurt(e, dmg, true);
+  } else if (key === 'bible') {
+    if (bullets.some(b => b.kind === 'book' && b.owner === p)) return;
+    const n = Math.min(6, L + 1);                                  // 2..6 books
+    for (let i = 0; i < n; i++) bullets.push({ kind: 'book', ang: i * Math.PI * 2 / n, R: 70 + L * 8, x: p.x, y: p.y, r: 9 + L, life: 2.5 + L * 0.7, dmg, hit: new Set(), hitT: {} });
+  } else if (key === 'fire') {
+    const e = enemies[Math.floor(Math.random() * enemies.length)];
+    if (!e) return;
+    const a = Math.atan2(e.y - p.y, e.x - p.x), sp = 260 + L * 20;
+    bullets.push({ kind: 'bolt', x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 10 + L * 2, life: 2.5, dmg, pierce: 2 + L, hit: new Set(), col: '#ff6a00' });
+    beep(180, 0.2, 'sawtooth', 0.04);
+  } else if (key === 'cross') {
+    const e = enemies.slice().sort((a, b) => dist(a, p) - dist(b, p))[0];
+    const a = e ? Math.atan2(e.y - p.y, e.x - p.x) : Math.random() * Math.PI * 2;
+    throwCross(a, 380 + L * 30, 10 + L * 2, dmg);
+    beep(500, 0.1, 'triangle', 0.03);
+  } else if (key === 'lightning') {
+    const n = 1 + Math.floor(L / 2), R = 36 + L * 5;                // 1,2,2,3,3,4 strikes
+    const targets = enemies.slice().sort(() => Math.random() - 0.5).slice(0, n);
+    for (const e of targets) zap(e.x, e.y, R, dmg);
+    if (targets.length) beep(1400, 0.12, 'square', 0.03);
+  } else if (key === 'water') {
+    const n = 1 + Math.floor(L / 3), R = 40 + L * 6;                // 1,1,2,2,2,3 flasks
+    for (let i = 0; i < n; i++) throwFlask(320, R, 3 + L * 0.4, dmg, false);
+    beep(900, 0.1, 'sine', 0.03);
+  } else if (key === 'tracer') {
+    const n = 1 + Math.floor(L / 3);                                // 1,1,2,2,2,3 runes
+    for (let i = 0; i < n; i++) throwRune(380 + L * 25, 7 + L, 3 + L * 0.5, dmg, 0);
+    beep(700, 0.08, 'sine', 0.03);
+  } else if (key === 'pentagram') {
+    blastScreen(400 + L * 40, dmg, '#ff5dff', false);
+  } else if (key === 'mana') {
+    bullets.push({ kind: 'slash', x: p.x, y: p.y, w: 36 + L * 8, h: 620, life: 0.5 + L * 0.1, dmg, hitT: {}, col: '#b58cff', follow: true });
+    beep(1000, 0.3, 'sine', 0.03);
+  } else if (key === 'phiera') {
+    const n = 1 + Math.floor(L / 2);                                // bullets per direction
+    for (let i = 0; i < 4; i++) fireVolley(Math.PI / 4 + i * Math.PI / 2, n, 560, Math.floor(L / 3), dmg);
+    beep(1100, 0.06, 'square', 0.02);
+  } else if (key === 'sparrow') {
+    const n = 1 + Math.floor(L / 2);
+    for (let i = 0; i < 4; i++) fireVolley(i * Math.PI / 2, n, 600, Math.floor(L / 3), dmg);
+    beep(1300, 0.06, 'square', 0.02);
+  } else if (key === 'pinion') {
+    if (p.moving) bullets.push({ kind: 'puddle', x: p.x, y: p.y, r: 18 + L * 3, life: 0.6 + L * 0.1, dmg, hitT: {}, col: '#6a6aff' }); // zone left behind
+    else if (w.wasMoving) { zap(p.x + p.face * 50, p.y, 45 + L * 8, dmg * 3, '#9a9aff'); beep(300, 0.15, 'square', 0.04); } // strike on stopping
+    w.wasMoving = p.moving;
+  }
+  // ---- evolved weapons ----
+  else if (key === 'bloodytear') {
+    for (const s of [1, -1]) bullets.push({ kind: 'slash', x: p.x + s * 90, y: p.y - 10, w: 220, h: 70, life: 0.2, dmg, hit: new Set(), col: '#ff3b3b', leech: 1 });
+    beep(250, 0.1, 'sawtooth', 0.04);
+  } else if (key === 'holywand') {
+    const e = enemies.slice().sort((a, b) => dist(a, p) - dist(b, p))[0];
+    if (!e) return;
+    const a = Math.atan2(e.y - p.y, e.x - p.x);
+    bullets.push({ kind: 'bolt', x: p.x, y: p.y, vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, r: 7, life: 2, dmg, pierce: 3, hit: new Set(), col: '#fff3a0' });
+  } else if (key === 'thousandedge') {
+    bullets.push({ kind: 'bolt', x: p.x, y: p.y + rnd(-14, 14), vx: p.face * 600, vy: rnd(-30, 30), r: 4, life: 1.2, dmg, pierce: 2, hit: new Set(), col: '#ddd' });
+  } else if (key === 'deathspiral') {
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + time; bullets.push({ kind: 'axe', x: p.x, y: p.y, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, r: 16, life: 2.5, dmg, hit: new Set(), rot: 0, nograv: true }); }
+    beep(160, 0.2, 'triangle', 0.05);
+  } else if (key === 'souleater') {
+    const R = 170 * p.area;
+    for (const e of enemies) if (dist(e, p) < R + e.r) { const was = e.hp; hurt(e, dmg, true); if (was > 0 && e.hp <= 0) p.hp = Math.min(p.maxHp, p.hp + 2); }
+  } else if (key === 'vespers') {
+    if (bullets.some(b => b.kind === 'book' && b.owner === p)) return;
+    for (let i = 0; i < 6; i++) bullets.push({ kind: 'book', ang: i * Math.PI / 3, R: 110, x: p.x, y: p.y, r: 12, life: 1e9, dmg, hit: new Set(), hitT: {}, evolved: true });
+  } else if (key === 'hellfire') {
+    const targets = enemies.slice().sort(() => Math.random() - 0.5).slice(0, 3);
+    for (const e of targets) { const a = Math.atan2(e.y - p.y, e.x - p.x); bullets.push({ kind: 'bolt', x: p.x, y: p.y, vx: Math.cos(a) * 340, vy: Math.sin(a) * 340, r: 20, life: 3, dmg, pierce: 999, hit: new Set(), col: '#ff3b00' }); }
+    if (targets.length) beep(140, 0.3, 'sawtooth', 0.05);
+  } else if (key === 'heavensword') {
+    const targets = enemies.slice().sort((a, b) => dist(a, p) - dist(b, p)).slice(0, 3);
+    if (!targets.length) return;
+    for (const e of targets) throwCross(Math.atan2(e.y - p.y, e.x - p.x), 520, 16, dmg, '#fff3a0');
+    beep(600, 0.12, 'triangle', 0.04);
+  } else if (key === 'thunderloop') {
+    const targets = enemies.slice().sort(() => Math.random() - 0.5).slice(0, 8);
+    for (const e of targets) zap(e.x, e.y, 70, dmg);
+    if (targets.length) beep(1200, 0.2, 'square', 0.05);
+  } else if (key === 'laborra') {
+    for (let i = 0; i < 3; i++) throwFlask(360, 95, 6, dmg, true);
+    beep(800, 0.15, 'sine', 0.04);
+  } else if (key === 'nofuture') {
+    for (let i = 0; i < 2; i++) throwRune(480, 10, 5, dmg, 70);    // boom radius 70 on every bounce
+    beep(600, 0.1, 'sine', 0.04);
+  } else if (key === 'moon') {
+    blastScreen(600, dmg, '#fff3a0', true);
+  } else if (key === 'mannajja') {
+    bullets.push({ kind: 'slash', x: p.x, y: p.y, w: 110, h: 700, life: 1.2, dmg, hitT: {}, col: '#ff5dff', follow: true, slow: 1.5 });
+    beep(800, 0.4, 'sine', 0.04);
+  } else if (key === 'phieraggi') {
+    for (let i = 0; i < 16; i++) fireVolley(i * Math.PI / 8 + time * 1.5, 1, 640, 4, dmg); // the pattern slowly spins
+    beep(900, 0.08, 'square', 0.03);
+  } else if (key === 'valkyrie') {
+    if (p.moving) bullets.push({ kind: 'puddle', x: p.x, y: p.y, r: 40, life: 1.5, dmg, hitT: {}, col: '#ff6a00' });
+    else if (w.wasMoving) { zap(p.x + p.face * 80, p.y, 110, dmg * 4, '#ff6a00'); beep(200, 0.3, 'sawtooth', 0.06); }
+    w.wasMoving = p.moving;
+  }
+}
+// Candelabrador / Bracer / Spellbinder / Duplicator: applied to every bullet a weapon just created (from index n0 on).
+function applyPassives(n0) {
+  const p = player, made = bullets.slice(n0);
+  for (const b of made) {
+    b.owner = p; // whose books orbit / whose beam follows / who gets healed by leech
+    if (b.nohit) continue;
+    b.r *= p.area; if (b.w) b.w *= p.area; if (b.h) b.h *= p.area; if (b.R) b.R *= p.area;
+    if (b.vx) b.vx *= p.pspeed; if (b.vy) b.vy *= p.pspeed; if (b.ax) b.ax *= p.pspeed; if (b.ay) b.ay *= p.pspeed;
+    if (b.life < 1e8) b.life *= p.duration;
+  }
+  for (let j = 1; j <= p.amount; j++) for (const b of made) {
+    if (b.nohit || b.kind === 'book') continue; // books are placed by count; visuals don't need copies
+    bullets.push({ ...b, hit: b.hit && new Set(), hitT: b.hitT && {}, delay: (b.delay || 0) + 0.12 * j });
+  }
+}
+// Boomerang: flies out along angle `a`, decelerates, and comes back past where it was thrown from.
+function throwCross(a, sp, r, dmg, col) {
+  const p = player;
+  bullets.push({ kind: 'cross', x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, ax: -Math.cos(a) * sp * 1.2, ay: -Math.sin(a) * sp * 1.2, r, life: 1.7, dmg, hitT: {}, rot: 0, col });
+}
+// Strike: instant area damage around (x, y) plus a short-lived visual (no collision of its own).
+// Without `col` it's drawn as a lightning bolt from the sky; with `col` it's just a coloured flash.
+function zap(x, y, R, dmg, col) {
+  R *= player.area;
+  for (const e of enemies) if (e.hp > 0 && Math.hypot(e.x - x, e.y - y) < R + e.r) hurt(e, dmg, true);
+  bullets.push({ kind: 'zap', x, y, r: R, life: 0.25, nohit: true, col });
+}
+// Flask: lands after a short delay on a random enemy within `range` (or a random spot nearby) and leaves a puddle that damages every 0.5s.
+function throwFlask(range, R, life, dmg, evolved) {
+  const p = player, near = enemies.filter(e => dist(e, p) < range), e = near[Math.floor(Math.random() * near.length)];
+  const a = Math.random() * Math.PI * 2, d = rnd(60, 180);
+  bullets.push({ kind: 'puddle', x: e ? e.x : p.x + Math.cos(a) * d, y: e ? e.y : p.y + Math.sin(a) * d, r: R, life, dmg, hitT: {}, delay: 0.5, evolved });
+}
+// Rune: flies in a random direction, bounces off the edges of the view, re-hits every 0.5s. `boom` > 0 = explode on every bounce.
+function throwRune(sp, r, life, dmg, boom) {
+  const p = player, a = Math.random() * Math.PI * 2;
+  bullets.push({ kind: 'tracer', x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r, life, dmg, hitT: {}, boom, col: boom ? '#ff8a3b' : '#7dffb0' });
+}
+// Screen blast: damages everything within R of the player and shows an expanding ring. `pull` drags every gem to the player.
+function blastScreen(R, dmg, col, pull) {
+  const p = player; R *= p.area;
+  for (const e of enemies) if (dist(e, p) < R) hurt(e, dmg, true);
+  if (pull) for (const g of gems) if (!g.heal) g.pull = true;
+  bullets.push({ kind: 'ring', x: p.x, y: p.y, r: 0, R, life: 0.6, max: 0.6, nohit: true, col });
+  beep(90, 0.6, 'sawtooth', 0.06);
+}
+// Volley: `n` bullets in a row along angle `a`, slightly staggered.
+function fireVolley(a, n, sp, pierce, dmg) {
+  const p = player;
+  for (let j = 0; j < n; j++) bullets.push({ kind: 'bolt', x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 4, life: 1.1, dmg, pierce, hit: new Set(), col: '#ffe08a', delay: j * 0.08 });
+}
+
+function hurt(e, dmg, quiet) {
+  e.hp -= dmg; e.flash = 0.1;
+  texts.push({ x: e.x + rnd(-8, 8), y: e.y - e.r, t: Math.round(dmg), life: 0.6, col: '#fff' });
+  if (e.hp <= 0) {
+    kills++;
+    for (let i = 0; i < 6; i++) particles.push({ x: e.x, y: e.y, vx: rnd(-120, 120), vy: rnd(-120, 120), life: 0.4, col: e.col });
+    if (e.boss) {
+      for (let i = 0; i < 8; i++) gems.push({ x: e.x + rnd(-30, 30), y: e.y + rnd(-30, 30), v: Math.ceil(e.xp / 8) });
+      for (let i = 0; i < 15; i++) gems.push({ x: e.x + rnd(-40, 40), y: e.y + rnd(-40, 40), coin: coinValue() });
+      spawnFood(e.x, e.y);
+    } else {
+      gems.push({ x: e.x, y: e.y, v: e.xp });
+      const luck = teamMax('luck');
+      if (Math.random() < FOOD_DROP_CHANCE * luck) spawnFood(e.x + 10, e.y); // rare food drop (Clover helps)
+      if (Math.random() < COIN_DROP_CHANCE * (1 + teamCurse() * CURSE_POWER) * luck) gems.push({ x: e.x - 10, y: e.y, coin: coinValue() }); // occasional coin, more with Cursed Skull / Clover
+    }
+    if (!quiet) beep(150, 0.1, 'square', 0.03);
+  }
+}
+
+// ---------- Level up ----------
+// Can weapon `k` evolve right now for player `q`? Needs its passive, and for union evolutions the partner weapon at max level too.
+function evoReady(k, q = player) {
+  const e = WEAPONS[k].evo;
+  return !!(e && q.passives[e.needs] && (!e.with || (q.weapons[e.with] && q.weapons[e.with].lvl >= MAXLVL)));
+}
+const evoNeedsText = def => PASSIVES[def.evo.needs].name + (def.evo.with ? ' + ' + WEAPONS[def.evo.with].name : '');
+
+// ---------- Evolution key (I) ----------
+// Lists every evolution and what it needs. During a run each player's requirements are ticked off as they get them.
+let evoFrom = 'menu'; // state to return to when the key is closed
+function renderEvos() {
+  const seen = new Set(), rows = [];
+  const req = (txt, ok) => `<span class="req ${ok ? 'ok' : 'no'}">${ok ? '✔' : '✘'} ${txt}</span>`;
+  for (const k in WEAPONS) {
+    const def = WEAPONS[k]; if (!def.evo || seen.has(def.evo.into)) continue; seen.add(def.evo.into); // union evolutions listed once
+    const evo = WEAPONS[def.evo.into], ws = def.evo.with ? [k, def.evo.with] : [k], ps = def.evo.needs;
+    let lines;
+    if (!players.length) lines = ['Needs: ' + ws.map(w => `${WEAPONS[w].name} Lv ${MAXLVL}`).concat(PASSIVES[ps].name).join(' + ')];
+    else lines = players.map(q => (twoP ? `P${q.idx + 1}: ` : '') + (q.weapons[def.evo.into] ? '<span class="req ok">✔ OWNED</span>'
+      : ws.map(w => req(`${WEAPONS[w].name} Lv ${MAXLVL}`, q.weapons[w] && q.weapons[w].lvl >= MAXLVL)).concat(req(PASSIVES[ps].name, q.passives[ps])).join(' + ')));
+    rows.push(`<div class="item info"><div class="lhs">${icon(def.evo.into)}<div><b style="color:#ff8a3b">${evo.name}</b><span>${evo.desc}</span>${lines.map(l => `<span>${l}</span>`).join('')}</div></div></div>`);
+  }
+  $('evoItems').innerHTML = rows.join('');
+}
+function openEvos() { if (state === 'evos') return; evoFrom = state; state = 'evos'; renderEvos(); show('evos'); }
+function closeEvos() {
+  if (state !== 'evos') return;
+  state = evoFrom;
+  if (evoFrom === 'play') { show(null); lastT = performance.now(); }
+  else show(evoFrom === 'over' ? 'gameover' : evoFrom);
+}
+let pending = []; // players who still have to pick an upgrade for this level
+function levelUp() {
+  teamLvl++; teamXp -= teamNext; teamNext = xpToNext(teamLvl);
+  beep(600, 0.3, 'sine', 0.05);
+  for (const q of players) if (!q.alive) { // fallen players come back at half HP next to their partner
+    const c = camCenter(); q.alive = true; q.hp = q.maxHp / 2; q.hurt = 2; q.x = c.x; q.y = c.y;
+    texts.push({ x: c.x, y: c.y - 60, t: `P${q.idx + 1} IS BACK!`, life: 2.5, col: '#4dff6a', big: true });
+  }
+  pending = alivePlayers();
+  nextChoice();
+}
+function nextChoice() { // show the upgrade screen to the next player in the queue; resume play once everyone has picked
+  while (pending.length) {
+    const q = pending.shift(); player = q;
+    choices = buildChoices(q);
+    if (!choices.length) { q.hp = Math.min(q.maxHp, q.hp + 30); continue; } // nothing left to upgrade: heal instead
+    $('levelupTitle').textContent = twoP ? `P${q.idx + 1} ${q.name.toUpperCase()} — LEVEL UP!` : 'LEVEL UP!';
+    $('levelupSlots').textContent = `Weapons ${Object.keys(q.weapons).length}/${MAX_WEAPONS} • Passives ${Object.keys(q.passives).length}/${MAX_PASSIVES}`;
+    sel = 0; state = 'levelup'; renderChoices(); levelupEl.classList.remove('hidden'); return;
+  }
+  levelupEl.classList.add('hidden'); state = 'play'; lastT = performance.now();
+  if (teamXp >= teamNext) levelUp();
+}
+function buildChoices(q) {
+  // Every option carries a weight: things you already own get UPGRADE_WEIGHT, new items get 1.
+  const pool = [], out = [];
+  for (const k in WEAPONS) {
+    const def = WEAPONS[k], w = q.weapons[k];
+    if (def.evolved) continue;
+    if (!w) pool.push({ type: 'w', key: k, wt: 1 });
+    else if (w.lvl < MAXLVL) pool.push({ type: 'w', key: k, wt: UPGRADE_WEIGHT });
+    else if (evoReady(k, q) && !out.some(c => c.type === 'e' && WEAPONS[c.key].evo.into === def.evo.into)) out.push({ type: 'e', key: k }); // evolution ready: always offered (once per result)
+  }
+  for (const k in PASSIVES) { const lv = q.passives[k] || 0; if (lv < (PASSIVES[k].max || 5)) pool.push({ type: 'p', key: k, wt: lv ? UPGRADE_WEIGHT : 1 }); }
+  // slot limits: once a category is full, only upgrades to what you already have are offered
+  const isNew = c => c.type === 'w' ? !q.weapons[c.key] : !q.passives[c.key];
+  if (Object.keys(q.weapons).length >= MAX_WEAPONS) for (let i = pool.length - 1; i >= 0; i--) if (pool[i].type === 'w' && isNew(pool[i])) pool.splice(i, 1);
+  if (Object.keys(q.passives).length >= MAX_PASSIVES) for (let i = pool.length - 1; i >= 0; i--) if (pool[i].type === 'p' && isNew(pool[i])) pool.splice(i, 1);
+  while (out.length < 3 && pool.length) out.push(pool.splice(pickWeighted(pool), 1)[0]);
+  return out;
+}
+function pickWeighted(pool) { // index of a random entry, proportional to its `wt`
+  let r = Math.random() * pool.reduce((s, c) => s + c.wt, 0);
+  for (let i = 0; i < pool.length; i++) { r -= pool[i].wt; if (r < 0) return i; }
+  return pool.length - 1;
+}
+function renderChoices() {
+  choicesEl.innerHTML = choices.map((c, i) => {
+    if (c.type === 'e') {
+      const base = WEAPONS[c.key], evo = WEAPONS[base.evo.into];
+      return `<div class="choice evo ${i === sel ? 'sel' : ''}">${icon(base.evo.into, 48)}<div><b>${evo.name}</b> <small style="color:#ff8a3b">EVOLUTION</small><span>${base.name} + ${evoNeedsText(base)} → ${evo.desc}</span></div></div>`;
+    }
+    const def = c.type === 'w' ? WEAPONS[c.key] : PASSIVES[c.key];
+    const cur = c.type === 'w' ? (player.weapons[c.key]?.lvl || 0) : (player.passives[c.key] || 0);
+    let tag = cur ? `Lv ${cur} → ${cur + 1}` : 'NEW';
+    let extra = '';
+    if (c.type === 'w' && def.evo) extra = `<span style="color:#ff8a3b">Evolves with ${evoNeedsText(def)} at Lv ${MAXLVL} → ${WEAPONS[def.evo.into].name}</span>`;
+    return `<div class="choice ${i === sel ? 'sel' : ''}">${icon(c.key, 48)}<div><b>${def.name}</b> <small style="color:#ffd84d">${tag}</small><span>${def.desc}</span>${extra}</div></div>`;
+  }).join('');
+}
+function moveSel(d) { sel = (sel + d + choices.length) % choices.length; renderChoices(); beep(500, 0.05, 'sine', 0.02); }
+function confirmChoice() {
+  const c = choices[sel], p = player;
+  if (c.type === 'e') {
+    const evo = WEAPONS[c.key].evo, into = evo.into;
+    delete p.weapons[c.key]; if (evo.with) delete p.weapons[evo.with]; p.weapons[into] = { lvl: MAXLVL, t: 0 };
+    bullets = bullets.filter(b => !(b.kind === 'book' && b.owner === p)); // let Vespers respawn this player's books
+    texts.push({ x: p.x, y: p.y - 60, t: WEAPONS[into].name.toUpperCase() + '!', life: 2.5, col: '#ff8a3b', big: true });
+    beep(400, 0.5, 'sine', 0.06);
+  }
+  else if (c.type === 'w') { if (p.weapons[c.key]) p.weapons[c.key].lvl++; else p.weapons[c.key] = { lvl: 1, t: 0 }; }
+  else {
+    p.passives[c.key] = (p.passives[c.key] || 0) + 1;
+    if (c.key === 'might') p.might += 0.15;
+    if (c.key === 'speed') p.speed *= 1.12;
+    if (c.key === 'hp') { p.maxHp += 20; p.hp += 20; }
+    if (c.key === 'cool') p.cool *= 0.92;
+    if (c.key === 'magnet') p.magnet *= 1.4;
+    if (c.key === 'armor') p.armor += 1;
+    if (c.key === 'regen') p.regen += 0.5;
+    if (c.key === 'curse') p.curse += 1;
+    if (c.key === 'area') p.area += 0.1;
+    if (c.key === 'pspeed') p.pspeed += 0.1;
+    if (c.key === 'duration') p.duration += 0.1;
+    if (c.key === 'amount') p.amount += 1;
+    if (c.key === 'luck') p.luck += 0.15;
+    if (c.key === 'growth') p.growth += 0.08;
+    if (c.key === 'greed') p.greed += 0.1;
+    if (c.key === 'revive') p.revives += 1;
+  }
+  beep(900, 0.15, 'sine', 0.04);
+  nextChoice(); // the other player's turn, or back to the action
+}
+
+// ---------- Update ----------
+function update(dt) {
+  time += dt;
+  // movement: each player reads their own keys
+  for (const p of players) {
+    if (!p.alive) continue;
+    let dx = 0, dy = 0;
+    if (down(...p.keys.l)) dx--; if (down(...p.keys.r)) dx++;
+    if (down(...p.keys.u)) dy--; if (down(...p.keys.d)) dy++;
+    p.moving = !!(dx || dy);
+    if (dx || dy) { const l = Math.hypot(dx, dy); p.x += dx / l * p.speed * dt; p.y += dy / l * p.speed * dt; if (dx) p.face = Math.sign(dx); }
+    p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);
+    p.hurt = Math.max(0, p.hurt - dt);
+  }
+  // 2 players: nobody can walk off the edge of the shared screen (the camera sits between them)
+  if (twoP) { const c = camCenter(); for (const p of players) if (p.alive) { p.x = Math.max(c.x - W / 2 + 24, Math.min(c.x + W / 2 - 24, p.x)); p.y = Math.max(c.y - H / 2 + 24, Math.min(c.y + H / 2 - 24, p.y)); } }
+  const cam = camCenter();
+
+  // spawning
+  const rate = Math.max(0.12, 1.1 - time / 600);
+  spawnTimer -= dt;
+  if (spawnTimer <= 0) { spawnTimer = rate; const n = 1 + Math.floor(time / 90); for (let i = 0; i < n; i++) if (enemies.length < 400) spawnEnemy(false); }
+  // food scattered around the map
+  foodTimer -= dt;
+  if (foodTimer <= 0) { foodTimer = rnd(15, 25); const a = Math.random() * Math.PI * 2, d = rnd(350, 650); spawnFood(cam.x + Math.cos(a) * d, cam.y + Math.sin(a) * d); }
+  bossTimer -= dt; if (bossTimer <= 0) { bossTimer = BOSS_EVERY; spawnEnemy(true); texts.push({ x: cam.x, y: cam.y - 60, t: 'A BOSS APPEARS!', life: 2.5, col: '#ff4d4d', big: true }); beep(80, 0.6, 'sawtooth', 0.08); }
+
+  // weapons (each player's own; they also fire 5% faster per level)
+  for (const p of players) {
+    if (!p.alive) continue;
+    player = p; // the weapon code reads `player`
+    for (const k in p.weapons) { const w = p.weapons[k]; w.t -= dt; if (w.t <= 0) { w.t = WEAPONS[k].cd * p.cool * (1 - (w.lvl - 1) * 0.05); const n0 = bullets.length; fire(k, w); applyPassives(n0); } }
+  }
+
+  // enemies: chase whichever living player is closest, hurt anyone they touch
+  for (const e of enemies) {
+    const p = nearestPlayer(e); if (!p) break;
+    const a = Math.atan2(p.y - e.y, p.x - e.x), sp = e.slow > 0 ? e.spd * 0.5 : e.spd; // slowed enemies move at half speed
+    e.x += Math.cos(a) * sp * dt; e.y += Math.sin(a) * sp * dt;
+    e.flash = Math.max(0, e.flash - dt); e.slow = Math.max(0, (e.slow || 0) - dt);
+    for (const q of players) if (q.alive && q.hurt <= 0 && dist(e, q) < e.r + q.r) {
+      q.hp -= Math.max(1, e.dmg - q.armor); q.hurt = 0.5; beep(120, 0.15, 'sawtooth', 0.05);
+      if (q.hp <= 0) { playerDown(q); if (state !== 'play') return; }
+    }
+  }
+  // separate enemies a bit
+  for (let i = 0; i < enemies.length; i++) for (let j = i + 1; j < enemies.length; j++) {
+    const a = enemies[i], b = enemies[j]; const ddx = b.x - a.x, ddy = b.y - a.y, d = Math.hypot(ddx, ddy), m = a.r + b.r;
+    if (d < m && d > 0) { const push = (m - d) / 2 / d; a.x -= ddx * push; a.y -= ddy * push; b.x += ddx * push; b.y += ddy * push; }
+  }
+
+  // bullets
+  for (const b of bullets) {
+    if (b.delay > 0) { b.delay -= dt; continue; }
+    b.life -= dt;
+    const o = b.owner || players[0]; // the player this bullet belongs to
+    if (b.kind === 'bolt') { b.x += b.vx * dt; b.y += b.vy * dt; }
+    if (b.kind === 'axe') { if (!b.nograv) b.vy += 900 * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.rot += 10 * dt; }
+    if (b.kind === 'book') { b.ang += (b.evolved ? 4 : 3) * dt; b.x = o.x + Math.cos(b.ang) * b.R; b.y = o.y + Math.sin(b.ang) * b.R; }
+    if (b.kind === 'cross') { b.vx += b.ax * dt; b.vy += b.ay * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.rot += 12 * dt; }
+    if (b.kind === 'tracer') { // bounce off the edges of the view
+      b.x += b.vx * dt; b.y += b.vy * dt; let bounced = false;
+      if ((b.x < cam.x - W / 2 && b.vx < 0) || (b.x > cam.x + W / 2 && b.vx > 0)) { b.vx = -b.vx; bounced = true; }
+      if ((b.y < cam.y - H / 2 && b.vy < 0) || (b.y > cam.y + H / 2 && b.vy > 0)) { b.vy = -b.vy; bounced = true; }
+      if (bounced && b.boom) { player = o; zap(b.x, b.y, b.boom, b.dmg); }
+    }
+    if (b.kind === 'ring') b.r = b.R * (1 - b.life / b.max);
+    if (b.follow) { b.x = o.x; b.y = o.y; }
+    if (b.nohit) continue; // pure visual (lightning flash, blast ring)
+    for (const e of enemies) {
+      if (e.hp <= 0) continue;
+      let hitNow = false;
+      if (b.kind === 'slash') hitNow = Math.abs(e.x - b.x) < b.w / 2 + e.r && Math.abs(e.y - b.y) < b.h / 2 + e.r;
+      else hitNow = dist(e, b) < e.r + b.r;
+      if (!hitNow) continue;
+      if (b.hitT) { if ((b.hitT[enemies.indexOf(e)] || 0) > time - 0.5) continue; b.hitT[enemies.indexOf(e)] = time; hurt(e, b.dmg); if (b.slow) e.slow = b.slow; continue; } // books, crosses, puddles, runes, beams: re-hit every 0.5s
+      if (b.hit.has(e)) continue;
+      b.hit.add(e); hurt(e, b.dmg);
+      if (b.leech && o.alive) o.hp = Math.min(o.maxHp, o.hp + b.leech);
+      if (b.kind === 'bolt') { if (b.pierce > 0) b.pierce--; else { b.life = 0; break; } }
+    }
+  }
+  bullets = bullets.filter(b => b.life > 0);
+  enemies = enemies.filter(e => e.hp > 0);
+
+  // gems: drawn to, and picked up by, the closest living player; XP goes to the whole team
+  for (const g of gems) {
+    const p = nearestPlayer(g); if (!p) break;
+    const d = dist(g, p);
+    if ((d < p.magnet || g.pull) && !g.heal) { const a = Math.atan2(p.y - g.y, p.x - g.x); const s = g.pull ? 900 : 400 + (p.magnet - d) * 4; g.x += Math.cos(a) * s * dt; g.y += Math.sin(a) * s * dt; }
+    if (d < p.r + (g.heal ? 12 : 6)) {
+      g.dead = true;
+      if (g.heal) { p.hp = Math.min(p.maxHp, p.hp + FOOD_HEAL); texts.push({ x: p.x, y: p.y - 30, t: '+' + FOOD_HEAL, life: 1, col: '#5dff8a' }); beep(700, 0.2, 'sine', 0.04); }
+      else if (g.coin) { addCoins(g.coin); beep(1500, 0.08, 'triangle', 0.03); }
+      else { teamXp += g.v * XP_MULT * p.growth; beep(1000 + Math.random() * 300, 0.05, 'sine', 0.015); }
+    }
+  }
+  gems = gems.filter(g => !g.dead);
+  if (teamXp >= teamNext) levelUp();
+
+  for (const q of particles) { q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt; }
+  particles = particles.filter(q => q.life > 0);
+  for (const t of texts) { t.y -= 30 * dt; t.life -= dt; }
+  texts = texts.filter(t => t.life > 0);
+
+  if (time >= 900) gameOver(true);
+}
+
+// A player ran out of HP: use a revive if they have one, otherwise they fall. The run ends when nobody is left standing.
+function playerDown(p) {
+  if (p.revives > 0) { // shop Revival / Tiragisú: a second chance
+    p.revives--; p.hp = p.maxHp / 2; p.hurt = 2;
+    enemies = enemies.filter(e => e.boss || dist(e, p) > 220);
+    texts.push({ x: p.x, y: p.y - 60, t: 'REVIVED!', life: 2.5, col: '#4dff6a', big: true });
+    beep(500, 0.5, 'sine', 0.06);
+    return;
+  }
+  p.hp = 0; p.alive = false; p.moving = false;
+  bullets = bullets.filter(b => b.owner !== p || !(b.kind === 'book' || b.follow)); // their orbiting books / beams go with them
+  if (alivePlayers().length) { texts.push({ x: p.x, y: p.y - 60, t: `P${p.idx + 1} HAS FALLEN`, life: 2.5, col: '#ff4d4d', big: true }); beep(60, 0.5, 'sawtooth', 0.06); }
+  else gameOver(false);
+}
+function gameOver(won) {
+  state = 'over';
+  $('gameover').innerHTML = `<h1 style="color:${won ? '#ffd84d' : '#ff4d4d'}">${won ? 'YOU SURVIVED!' : twoP ? 'YOU BOTH DIED' : 'YOU DIED'}</h1>
+    <p>Time: ${fmt(time)} &nbsp;•&nbsp; Level ${teamLvl} &nbsp;•&nbsp; Kills: ${kills}</p>
+    <div class="coins">🪙 +${runCoins} this run &nbsp;•&nbsp; ${coins} total</div>
+    <div><span class="btn play" id="againBtn">▶ PLAY AGAIN</span><span class="btn" id="menuBtn">☰ MENU</span></div>
+    <div class="hint">SPACE to play again &nbsp;•&nbsp; ESC for menu</div>`;
+  $('againBtn').onclick = startGame; $('menuBtn').onclick = openMenu;
+  show('gameover');
+  beep(won ? 700 : 60, 0.8, won ? 'sine' : 'sawtooth', 0.08);
+}
+const fmt = t => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+
+// ---------- Draw ----------
+function draw() {
+  const cam = camCenter();
+  const cx = W / 2 - cam.x, cy = H / 2 - cam.y;
+  ctx.fillStyle = '#1a2a1a'; ctx.fillRect(0, 0, W, H);
+  // ground grid
+  ctx.strokeStyle = '#223522'; ctx.lineWidth = 1; const G = 80;
+  for (let x = ((cx % G) + G) % G; x < W; x += G) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = ((cy % G) + G) % G; y < H; y += G) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  ctx.save(); ctx.translate(cx, cy);
+
+  // garlic auras
+  for (const p of players) if (p.alive && p.weapons.garlic) { const R = (45 + p.weapons.garlic.lvl * 22) * p.area; ctx.fillStyle = 'rgba(200,255,200,.12)'; ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, 7); ctx.fill(); ctx.strokeStyle = 'rgba(200,255,200,.4)'; ctx.stroke(); }
+  // gems
+  for (const g of gems) {
+    if (g.heal) { // roast chicken
+      if (sprite('chicken', g.x, g.y, 26)) continue;
+      ctx.fillStyle = '#f4e3c1'; ctx.fillRect(g.x - 3, g.y + 2, 12, 5);
+      ctx.fillStyle = '#c8772e'; ctx.beginPath(); ctx.ellipse(g.x - 3, g.y - 1, 11, 8, -0.5, 0, 7); ctx.fill();
+      ctx.fillStyle = '#e59a4a'; ctx.beginPath(); ctx.ellipse(g.x - 5, g.y - 3, 6, 4, -0.5, 0, 7); ctx.fill();
+      continue;
+    }
+    if (g.coin) {
+      if (sprite('coin', g.x, g.y, 12)) continue;
+      ctx.fillStyle = '#ffd84d'; ctx.beginPath(); ctx.arc(g.x, g.y, 6, 0, 7); ctx.fill();
+      ctx.strokeStyle = '#b8860b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(g.x, g.y, 3.5, 0, 7); ctx.stroke();
+      continue;
+    }
+    ctx.fillStyle = g.v >= 5 ? '#ff5dff' : g.v >= 2 ? '#5dff8a' : '#5ad8ff';
+    ctx.beginPath(); ctx.moveTo(g.x, g.y - 7); ctx.lineTo(g.x + 5, g.y); ctx.lineTo(g.x, g.y + 7); ctx.lineTo(g.x - 5, g.y); ctx.closePath(); ctx.fill();
+  }
+  // enemies
+  for (const e of enemies) {
+    const bob = Math.sin(time * 9 + e.seed) * 1.5; // little walk/flap wobble
+    const tgt = nearestPlayer(e) || cam; // face whoever they're chasing
+    if (!sprite(e.type, e.x, e.y, e.r * 2.6, { flip: tgt.x < e.x, flash: e.flash > 0, bob })) {
+      ctx.fillStyle = e.flash > 0 ? '#fff' : e.col;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, 7); ctx.fill();
+      ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(e.x - e.r * 0.3, e.y - e.r * 0.2, e.r * 0.15, 0, 7); ctx.arc(e.x + e.r * 0.3, e.y - e.r * 0.2, e.r * 0.15, 0, 7); ctx.fill();
+    }
+    if (e.boss) { ctx.fillStyle = '#300'; ctx.fillRect(e.x - 30, e.y - e.r - 12, 60, 6); ctx.fillStyle = '#f33'; ctx.fillRect(e.x - 30, e.y - e.r - 12, 60 * e.hp / e.maxHp, 6); }
+  }
+  // bullets
+  for (const b of bullets) {
+    if (b.delay > 0) continue;
+    if (b.kind === 'slash') { ctx.globalAlpha = Math.min(1, b.life / 0.18 * 0.8); ctx.fillStyle = b.col || '#fff'; ctx.beginPath(); ctx.ellipse(b.x, b.y, b.w / 2, b.h / 2, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
+    else if (b.kind === 'bolt') { ctx.fillStyle = b.col; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fill(); }
+    else if (b.kind === 'axe') { ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.rot); ctx.fillStyle = '#8a5a2b'; ctx.fillRect(-2, -16, 4, 32); ctx.fillStyle = '#cfd6e0'; ctx.beginPath(); ctx.arc(0, -10, 10, 0, 7); ctx.fill(); ctx.restore(); }
+    else if (b.kind === 'book') { ctx.fillStyle = b.evolved ? '#a040ff' : '#ffd84d'; ctx.fillRect(b.x - 8, b.y - 10, 16, 20); ctx.fillStyle = b.evolved ? '#ffb0ff' : '#fff'; ctx.fillRect(b.x - 5, b.y - 7, 10, 14); }
+    else if (b.kind === 'cross') { const s = b.r; ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.rot); ctx.fillStyle = b.col || '#ffd84d'; ctx.fillRect(-s * 0.2, -s, s * 0.4, s * 2); ctx.fillRect(-s * 0.7, -s * 0.45, s * 1.4, s * 0.4); ctx.restore(); }
+    else if (b.kind === 'zap') {
+      ctx.globalAlpha = Math.min(1, b.life / 0.25) * (b.col ? 0.6 : 1);
+      if (!b.col) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(b.x + 25, b.y - 340); ctx.lineTo(b.x - 12, b.y - 210); ctx.lineTo(b.x + 14, b.y - 110); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+      ctx.fillStyle = b.col || 'rgba(255,255,160,.5)'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    else if (b.kind === 'puddle') { const c = b.col || (b.evolved ? '#8a6bff' : '#5ad8ff'); ctx.globalAlpha = Math.min(1, b.life) * 0.45; ctx.fillStyle = c; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.stroke(); }
+    else if (b.kind === 'tracer') { ctx.fillStyle = b.col; ctx.globalAlpha = 0.4; ctx.beginPath(); ctx.arc(b.x - b.vx * 0.04, b.y - b.vy * 0.04, b.r * 0.8, 0, 7); ctx.fill(); ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.4, 0, 7); ctx.fill(); }
+    else if (b.kind === 'ring') { ctx.globalAlpha = b.life / b.max; ctx.strokeStyle = b.col; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
+  }
+  // players
+  for (const p of players) {
+    if (!p.alive) continue;
+    const blink = p.hurt > 0 && Math.floor(p.hurt * 20) % 2 === 1;
+    if (!sprite('player', p.x, p.y, p.r * 3, { flip: p.face < 0, flash: blink, bob: p.moving ? Math.abs(Math.sin(time * 12)) * -2 : 0 })) {
+      ctx.fillStyle = blink ? '#fff' : '#f2c9a0';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+      ctx.fillStyle = '#5a2d82'; ctx.fillRect(p.x - 14, p.y - 20, 28, 8); // hat
+      ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(p.x + p.face * 5, p.y - 2, 2.5, 0, 7); ctx.fill();
+    }
+    // hp bar
+    ctx.fillStyle = '#300'; ctx.fillRect(p.x - 18, p.y + 18, 36, 5); ctx.fillStyle = '#4dff6a'; ctx.fillRect(p.x - 18, p.y + 18, 36 * p.hp / p.maxHp, 5);
+    // P1 / P2 tag so you can tell who's who
+    if (twoP) { ctx.fillStyle = p.idx ? '#ffd84d' : '#5ad8ff'; ctx.font = 'bold 12px Segoe UI'; ctx.textAlign = 'center'; ctx.fillText('P' + (p.idx + 1), p.x, p.y - 28); }
+  }
+  // particles & texts
+  for (const q of particles) { ctx.globalAlpha = q.life / 0.4; ctx.fillStyle = q.col; ctx.fillRect(q.x - 3, q.y - 3, 6, 6); }
+  ctx.globalAlpha = 1;
+  for (const t of texts) { ctx.globalAlpha = Math.min(1, t.life); ctx.fillStyle = t.col; ctx.font = t.big ? 'bold 28px Segoe UI' : 'bold 13px Segoe UI'; ctx.textAlign = 'center'; ctx.fillText(t.t, t.x, t.y); }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // HUD
+  $('xp').style.width = (100 * teamXp / teamNext) + '%';
+  $('lvl').textContent = 'LV ' + teamLvl + '   ' + players.map(p => (twoP ? `P${p.idx + 1} ` : 'HP ') + (p.alive ? Math.ceil(p.hp) + '/' + p.maxHp : '✖ down')).join('   ');
+  $('kills').textContent = 'Kills: ' + kills + '   Coins: ' + coins;
+  $('timer').textContent = fmt(time);
+  // weapon lists: player 1 down the left edge, player 2 down the right
+  ctx.font = '13px Segoe UI';
+  for (const p of players) {
+    const right = !!p.idx, x = right ? W - 10 : 10, ix = right ? W - 18 : 18, tx = right ? W - 30 : 30; // ix = icon centre, tx = text start
+    ctx.textAlign = right ? 'right' : 'left';
+    let y = 80;
+    if (twoP) { ctx.fillStyle = right ? '#ffd84d' : '#5ad8ff'; ctx.fillText(`P${p.idx + 1} ${p.name}${p.alive ? '' : ' (down)'}`, x, y); y += 16; }
+    for (const k in p.weapons) {
+      const def = WEAPONS[k], lv = p.weapons[k].lvl;
+      ctx.fillStyle = def.evolved ? '#ff8a3b' : '#fff';
+      let label = def.evolved ? def.name + ' ★' : `${def.name} ${lv}`;
+      if (!def.evolved && lv >= MAXLVL && def.evo) label += evoReady(k, p) ? ' (evolve ready!)' : ` (needs ${evoNeedsText(def)})`;
+      sprite(k, ix, y - 5, 12); ctx.fillText(label, tx, y); y += 16;
+    }
+    for (const k in p.passives) { ctx.fillStyle = '#bbb'; sprite(k, ix, y - 5, 12); ctx.fillText(`${PASSIVES[k].name} ${p.passives[k]}`, tx, y); y += 16; }
+  }
+  ctx.textAlign = 'left'; ctx.fillStyle = '#888'; ctx.fillText('I = evolution key', 10, H - 10);
+}
+
+// ---------- Loop ----------
+function loop(now) {
+  if (state === 'play') { const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now; update(dt); }
+  if (players.length) draw();
+  else { ctx.fillStyle = '#1a2a1a'; ctx.fillRect(0, 0, W, H); }
+  $('pauseBtn').classList.toggle('hidden', state !== 'play');
+  $('hud').style.visibility = $('timer').style.visibility = players.length ? 'visible' : 'hidden';
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
