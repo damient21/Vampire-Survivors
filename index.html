@@ -66,7 +66,7 @@
     <p>Two players share one keyboard: <b>P1 = WASD</b>, <b>P2 = arrow keys</b>. XP is shared; fallen players return at the next level up.</p>
     <p>Collect blue gems to level up and choose upgrades. Survive 15 minutes.</p>
     <div class="coins">🪙 <span id="menuCoins">0</span> coins</div>
-    <div><span class="btn" id="tutorial">📘Tutorial</span><span class="btn play" id="playBtn">▶ 1 PLAYER</span><span class="btn play" id="play2Btn">👥 2 PLAYERS</span><span class="btn" id="shopBtn">🛒 SHOP</span><span class="btn" id="evoBtn">📖 EVOLUTIONS</span></div>
+    <div><span class="btn" id="tutorial" onclick="if (confirm("The tutorial will be in 'alert()' prompt format. Do you wish to continue?") == true) tutorial()">📘Tutorial</span><span class="btn play" id="playBtn">▶ 1 PLAYER</span><span class="btn play" id="play2Btn">👥 2 PLAYERS</span><span class="btn" id="shopBtn">🛒 SHOP</span><span class="btn" id="evoBtn">📖 EVOLUTIONS</span></div>
     <div class="hint">SPACE for 1 player &nbsp;•&nbsp; 2 for two players &nbsp;•&nbsp; ESC or P pauses during a run &nbsp;•&nbsp; I shows the evolution key any time</div>
   </div>
 
@@ -105,6 +105,14 @@
 
 <script src="textures.js"></script>
 <script>
+function tutorial() {
+  alert("Use WASD to move")
+  alert("Press 'I' to check evolution status or just to know what you need")
+  alert("Press 'P' to pause the game")
+  alert("The shop contains passive upgrades, while buying a character offers different starting weapons")
+  alert("The 2 player game isn't for people who want a challenge; its brutally easy")
+  alert("The 1 player game is the proper gameplay, as we have not updated the game settings yet for 2p (Coming Soon!)")
+}
 const canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
 ctx.imageSmoothingEnabled = false; // keep pixel art crisp
